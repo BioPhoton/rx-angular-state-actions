@@ -1,10 +1,11 @@
 import {Component} from '@angular/core';
 import {RxActionsFactory} from './actions';
 import {coerceNumberProperty} from "@angular/cdk/coercion";
+import {exhaustMap} from "rxjs";
+import {RxState} from "@rx-angular/state";
 
 interface UIActions {
-  search: string;
-  count: number;
+  auth: { user: string, pass: string };
 }
 
 function coerceEventValue<F = any>(e: any, fallback?: F): string | F {
@@ -23,26 +24,39 @@ function coerceNumber(e: Event | string | number): number {
   return coerceNumberProperty(coerceEventValue(e, +e + ''), 0);
 }
 
+function pluckValue(e: any): string {
+  return e.value;
+}
+
 @Component({
   selector: 'app-root',
   template: `
-    <label>Search: {{actions.search$ | async}}</label>
-    <input (input)="actions.search($event)">
-    <label>Count: {{actions.count$ | async}}</label>
-    <input type="number" (input)="actions.count($event)">
+    <label>User</label></br>
+    <input #user/>
+    </br>
+    <label>Pass:</label></br>
+    <input #pass type="password"/>
+    </br>
+    <button (click)="actions.auth({user, pass})">Login</button>
   `,
-  providers: [RxActionsFactory]
+  providers: [RxActionsFactory, RxState]
 })
 export class AppComponent {
+  // fake global state
+  authService = {login: (user: string, pass: string) => void 0};
 
   actions = this.actionFactory.create({
-    search: coerceString,
-    count: coerceNumber
+    auth: ({user, pass}: { user: string, pass: string }) => ({user: pluckValue(user), pass: pluckValue(pass)})
   });
+  login$ = this.actions.auth$.pipe(
+    exhaustMap(({user, pass}) => this.authService.login(user, pass))
+  );
 
-  constructor(private actionFactory: RxActionsFactory<UIActions>) {
-    this.actions.search('');
-    this.actions.count('4');
+  constructor(
+    private actionFactory: RxActionsFactory<UIActions>,
+    private state: RxState<UIActions>,
+  ) {
+    this.state.hold(this.login$)
   }
 
 }
